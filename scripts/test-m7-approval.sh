@@ -53,20 +53,16 @@ if grep -Eq -- '--force|--force-with-lease' <<<"$create_tag_job"; then
   printf 'release tag workflow must never force-update refs\n' >&2
   exit 1
 fi
-dispatch_job=$(awk '
-  /^  dispatch_release:$/ { in_job = 1 }
-  in_job && /^  [[:alnum:]_-]+:$/ && $0 != "  dispatch_release:" { exit }
-  in_job { print }
-' "$workflow")
-grep -Fq '    needs: create_tag' <<<"$dispatch_job"
-grep -Fq "if: github.repository == 'rheic/sandboxes-daemon' || github.repository == 'rheic/sandboxes-cli'" <<<"$dispatch_job"
-grep -Fq 'TAG: v${{ inputs.version }}' <<<"$dispatch_job"
-grep -Fq 'ref=$TAG' <<<"$dispatch_job"
-! grep -Fq 'contents: write' <<<"$dispatch_job"
-grep -Fq '      actions: write' <<<"$dispatch_job"
-grep -Fq 'actions/workflows/release.yml/dispatches' <<<"$dispatch_job"
-[[ "$(grep -Fc 'actions: write' "$workflow")" -eq 1 ]]
-if [[ -f "$root/.github/workflows/release.yml" ]]; then
-  grep -Fq '  workflow_dispatch:' "$root/.github/workflows/release.yml"
+if grep -Eq '^  dispatch_release:' "$workflow"; then
+  printf 'core module must not have a release dispatch job\n' >&2
+  exit 1
 fi
-printf 'PASS: tag write token is isolated; release dispatch has a separate minimal job\n'
+if grep -Fq 'actions: write' "$workflow"; then
+  printf 'core module must not grant Actions write permission\n' >&2
+  exit 1
+fi
+if [[ -f "$root/.github/workflows/release.yml" ]]; then
+  printf 'core module has an unexpected release workflow\n' >&2
+  exit 1
+fi
+printf 'PASS: immutable tag creation is isolated and no dispatch permission is granted\n'
